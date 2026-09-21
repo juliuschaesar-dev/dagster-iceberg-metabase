@@ -1,4 +1,4 @@
-# REST Countries Data Pipeline
+# Dagster Iceberg Metabase
 
 Dagster pipeline that fetches country data from the [REST Countries API](https://restcountries.com),
 lands it raw in Garage (S3-compatible object storage), cleans it into an
