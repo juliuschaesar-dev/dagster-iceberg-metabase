@@ -7,6 +7,10 @@ tables for a Metabase dashboard.
 
 Layers: **raw** (JSON in Garage) → **staging** (Iceberg table) → **datamart** (Iceberg tables).
 
+## Architecture
+
+![Architecture](docs/architecture.svg)
+
 ## Prerequisites
 
 - Docker + Docker Compose
