@@ -1,0 +1,148 @@
+name: dagster-iceberg-superset
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lakekeeper}
+      POSTGRES_USER: ${POSTGRES_USER:-lakekeeper}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lakekeeper}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  garage:
+    image: dxflrs/garage:v1.0.1
+    container_name: garage
+    restart: unless-stopped
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?GARAGE_RPC_SECRET is required}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?GARAGE_ADMIN_TOKEN is required}
+    ports:
+      - "3900:3900"  # S3 API
+      - "3901:3901"  # RPC
+      - "3903:3903"  # Admin API
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  lakekeeper-init:
+    image: quay.io/lakekeeper/catalog:v0.13.5
+    container_name: lakekeeper-init
+    restart: "no"
+    command: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LAKEKEEPER__PG_ENCRYPTION_KEY: ${LAKEKEEPER_PG_ENCRYPTION_KEY:-changeme-encryption-key}
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://${POSTGRES_USER:-lakekeeper}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lakekeeper}
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://${POSTGRES_USER:-lakekeeper}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lakekeeper}
+
+  lakekeeper:
+    image: quay.io/lakekeeper/catalog:v0.13.5
+    container_name: lakekeeper
+    restart: unless-stopped
+    command: ["serve"]
+    depends_on:
+      lakekeeper-init:
+        condition: service_completed_successfully
+    environment:
+      LAKEKEEPER__PG_ENCRYPTION_KEY: ${LAKEKEEPER_PG_ENCRYPTION_KEY:-changeme-encryption-key}
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://${POSTGRES_USER:-lakekeeper}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lakekeeper}
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://${POSTGRES_USER:-lakekeeper}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lakekeeper}
+      RUST_LOG: info
+    ports:
+      - "8181:8181"
+    healthcheck:
+      test: ["CMD", "/home/nonroot/lakekeeper", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  trino:
+    image: trinodb/trino:483
+    container_name: trino
+    restart: unless-stopped
+    depends_on:
+      lakekeeper:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    environment:
+      GARAGE_ACCESS_KEY_ID: ${GARAGE_ACCESS_KEY_ID:?GARAGE_ACCESS_KEY_ID is required}
+      GARAGE_SECRET_ACCESS_KEY: ${GARAGE_SECRET_ACCESS_KEY:?GARAGE_SECRET_ACCESS_KEY is required}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/v1/info | grep -q '\"starting\":false'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  metabase:
+    image: metabase/metabase:v0.63.18
+    container_name: metabase
+    restart: unless-stopped
+    depends_on:
+      trino:
+        condition: service_healthy
+    environment:
+      MB_SITE_NAME: REST Countries Dashboard
+      MB_DB_FILE: /metabase-data/metabase.db
+    ports:
+      - "3001:3000"
+    volumes:
+      - metabase_data:/metabase-data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  dagster:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dagster
+    restart: unless-stopped
+    depends_on:
+      trino:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DAGSTER_HOME: /opt/dagster/dagster_home
+      GARAGE_ENDPOINT_URL: http://garage:3900
+      TRINO_HOST: trino
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./dagster_project:/opt/dagster/app/dagster_project
+      - dagster_home:/opt/dagster/dagster_home
+    command: ["dagster", "dev", "-h", "0.0.0.0", "-p", "3000", "-m", "dagster_project"]
+
+volumes:
+  postgres_data:
+  garage_meta:
+  garage_data:
+  metabase_data:
+  dagster_home:
