@@ -19,11 +19,9 @@
 
   <!-- page background -->
   <rect x="0" y="0" width="1320" height="980" fill="#0b0f1a"/>
-  <text x="30" y="46" font-size="30" font-weight="bold" fill="#ffffff">Architecture</text>
-  <line x1="30" y1="64" x2="1290" y2="64" stroke="#2b2f3a" stroke-width="1"/>
 
   <!-- panel -->
-  <rect x="24" y="84" width="1272" height="868" rx="16" fill="#ffffff" stroke="#e5e7eb" stroke-width="1.5"/>
+  <rect x="24" y="24" width="1272" height="928" rx="16" fill="#ffffff" stroke="#e5e7eb" stroke-width="1.5"/>
 
   <!-- ===================== ROW 1: infra / control plane ===================== -->
   <!-- PostgreSQL -->
