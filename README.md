@@ -14,6 +14,7 @@ Layers: **raw** (JSON in Garage) → **staging** (Iceberg table) → **datamart*
 ## Prerequisites
 
 - Docker + Docker Compose
+- A REST Countries API key (`API_TOKEN` in `.env`)
 - Python 3.10+ (needed to run `scripts/init_lakekeeper_warehouse.py`, and for
   Dagster/tests outside Docker). Use a virtualenv so these don't pollute your
   global Python:
