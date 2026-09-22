@@ -11,6 +11,26 @@ Layers: **raw** (JSON in Garage) → **staging** (Iceberg table) → **datamart*
 
 ![Architecture](docs/architecture.svg)
 
+## Repository Structure
+
+```
+.
+├── dagster_project/       # Dagster pipeline code
+│   ├── assets/             # raw/staging/datamart asset definitions
+│   ├── io_managers/        # Iceberg/Garage IO managers
+│   └── resources/          # API, Garage, and Trino resource definitions
+├── docs/                  # Architecture diagram and other docs
+├── garage/                # Garage (S3-compatible storage) config
+├── scripts/               # One-off setup scripts (e.g. Lakekeeper warehouse init)
+├── tests/                 # Unit tests for the pipeline assets
+├── trino/
+│   └── catalog/            # Trino catalog configuration
+├── docker-compose.yml     # Service definitions (Dagster, Garage, Trino, Lakekeeper, Metabase, Postgres)
+├── Dockerfile             # Dagster service image
+├── pyproject.toml         # Python package/dependency definitions
+└── .env.example           # Environment variable template
+```
+
 ## Prerequisites
 
 - Docker + Docker Compose
