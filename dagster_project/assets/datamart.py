@@ -5,12 +5,10 @@ from dagster_project.constants import (
     SCHEMA_DATAMART,
     SCHEMA_STAGING,
     SNAPSHOT_DATE_COLUMN,
+    TABLE_DM_COUNTRIES,
     TABLE_DM_CURRENCY_DISTRIBUTION,
     TABLE_DM_LANGUAGE_DISTRIBUTION,
-    TABLE_DM_POPULATION_BY_REGION,
-    TABLE_DM_POPULATION_DENSITY,
     TABLE_DM_SUBREGION_SUMMARY,
-    TABLE_DM_TOP_COUNTRIES_BY_POPULATION,
     TABLE_STAGING_COUNTRIES,
 )
 from dagster_project.resources.trino_resource import TrinoResource
@@ -55,34 +53,6 @@ def _row_count_check(trino: TrinoResource, table: str) -> AssetCheckResult:
         f'WHERE "{SNAPSHOT_DATE_COLUMN}" = CURRENT_DATE'
     )
     return AssetCheckResult(passed=count is not None and count > 0, metadata={"row_count": count})
-
-
-@asset(group_name="datamart", deps=[stg_countries])
-def dm_population_by_region(
-    context: AssetExecutionContext, trino: TrinoResource
-) -> MaterializeResult:
-    """Datamart table: total population and country count per region, for the
-    'population by region' chart."""
-    row_count = _create_datamart_table(
-        trino,
-        TABLE_DM_POPULATION_BY_REGION,
-        f"""
-        SELECT
-            region,
-            sum(population) AS total_population,
-            count(*) AS country_count
-        FROM {_staging_ref(trino)}
-        WHERE region IS NOT NULL AND region <> ''
-        GROUP BY region
-        ORDER BY total_population DESC
-        """,
-    )
-    return MaterializeResult(metadata={"row_count": row_count})
-
-
-@asset_check(asset=dm_population_by_region)
-def dm_population_by_region_check(trino: TrinoResource) -> AssetCheckResult:
-    return _row_count_check(trino, TABLE_DM_POPULATION_BY_REGION)
 
 
 @asset(group_name="datamart", deps=[stg_countries])
@@ -146,7 +116,9 @@ def dm_subregion_summary(
     context: AssetExecutionContext, trino: TrinoResource
 ) -> MaterializeResult:
     """Datamart table: total population, total area and country count per
-    subregion, for a more granular breakdown than region alone."""
+    subregion. Also the source for region-level totals (group by region and
+    re-sum) - there's no separate per-region table since it'd just be this
+    one rolled up further."""
     row_count = _create_datamart_table(
         trino,
         TABLE_DM_SUBREGION_SUMMARY,
@@ -172,60 +144,32 @@ def dm_subregion_summary_check(trino: TrinoResource) -> AssetCheckResult:
 
 
 @asset(group_name="datamart", deps=[stg_countries])
-def dm_population_density(
-    context: AssetExecutionContext, trino: TrinoResource
-) -> MaterializeResult:
-    """Datamart table: population density (people per km²) per country, for
-    the 'most densely populated countries' chart."""
+def dm_countries(context: AssetExecutionContext, trino: TrinoResource) -> MaterializeResult:
+    """Datamart table: one row per country with population, area, density
+    and capital - the shared source for both the 'most densely populated'
+    and 'top countries by population' charts, which each just sort/limit
+    this same table differently at query time instead of needing their own
+    materialized tables."""
     row_count = _create_datamart_table(
         trino,
-        TABLE_DM_POPULATION_DENSITY,
-        f"""
-        SELECT
-            cca3,
-            name_common,
-            region,
-            population,
-            area,
-            population / area AS population_density
-        FROM {_staging_ref(trino)}
-        WHERE population IS NOT NULL AND area IS NOT NULL AND area > 0
-        ORDER BY population_density DESC
-        """,
-    )
-    return MaterializeResult(metadata={"row_count": row_count})
-
-
-@asset_check(asset=dm_population_density)
-def dm_population_density_check(trino: TrinoResource) -> AssetCheckResult:
-    return _row_count_check(trino, TABLE_DM_POPULATION_DENSITY)
-
-
-@asset(group_name="datamart", deps=[stg_countries])
-def dm_top_countries_by_population(
-    context: AssetExecutionContext, trino: TrinoResource
-) -> MaterializeResult:
-    """Datamart table: the 20 most populous countries, for a 'top countries'
-    chart."""
-    row_count = _create_datamart_table(
-        trino,
-        TABLE_DM_TOP_COUNTRIES_BY_POPULATION,
+        TABLE_DM_COUNTRIES,
         f"""
         SELECT
             cca3,
             name_common,
             region,
             capital,
-            population
+            population,
+            area,
+            CASE WHEN area IS NOT NULL AND area > 0 THEN population / area END AS population_density
         FROM {_staging_ref(trino)}
         WHERE population IS NOT NULL
         ORDER BY population DESC
-        LIMIT 20
         """,
     )
     return MaterializeResult(metadata={"row_count": row_count})
 
 
-@asset_check(asset=dm_top_countries_by_population)
-def dm_top_countries_by_population_check(trino: TrinoResource) -> AssetCheckResult:
-    return _row_count_check(trino, TABLE_DM_TOP_COUNTRIES_BY_POPULATION)
+@asset_check(asset=dm_countries)
+def dm_countries_check(trino: TrinoResource) -> AssetCheckResult:
+    return _row_count_check(trino, TABLE_DM_COUNTRIES)

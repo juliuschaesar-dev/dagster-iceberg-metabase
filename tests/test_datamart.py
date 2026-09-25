@@ -4,21 +4,17 @@ import pytest
 from dagster import materialize
 
 from dagster_project.assets.datamart import (
+    dm_countries,
     dm_currency_distribution,
     dm_language_distribution,
-    dm_population_by_region,
-    dm_population_density,
     dm_subregion_summary,
-    dm_top_countries_by_population,
 )
 
 DATAMART_ASSETS = [
-    (dm_population_by_region, "dm_population_by_region"),
     (dm_currency_distribution, "dm_currency_distribution"),
     (dm_language_distribution, "dm_language_distribution"),
     (dm_subregion_summary, "dm_subregion_summary"),
-    (dm_population_density, "dm_population_density"),
-    (dm_top_countries_by_population, "dm_top_countries_by_population"),
+    (dm_countries, "dm_countries"),
 ]
 
 

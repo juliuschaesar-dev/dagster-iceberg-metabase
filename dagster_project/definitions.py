@@ -19,12 +19,10 @@ all_assets = load_assets_from_modules([raw, staging, datamart])
 all_asset_checks = [
     staging.stg_countries_row_count_check,
     staging.stg_countries_required_columns_not_null_check,
-    datamart.dm_population_by_region_check,
     datamart.dm_currency_distribution_check,
     datamart.dm_language_distribution_check,
     datamart.dm_subregion_summary_check,
-    datamart.dm_population_density_check,
-    datamart.dm_top_countries_by_population_check,
+    datamart.dm_countries_check,
 ]
 
 countries_pipeline_job = define_asset_job(
