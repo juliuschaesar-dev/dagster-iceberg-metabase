@@ -16,12 +16,13 @@ Layers: **raw** (JSON in Garage) → **staging** (Iceberg table) → **datamart*
 ```
 .
 ├── dagster_project/       # Dagster pipeline code
-│   ├── assets/             # raw/staging/datamart asset definitions
+│   ├── assets/             # raw/staging/reference/datamart asset definitions
 │   ├── io_managers/        # Iceberg/Garage IO managers
 │   └── resources/          # API, Garage, and Trino resource definitions
-├── panel_app/             # HoloViz Panel dashboard app
-│   ├── dashboard.py         # Chart definitions and page layout
+├── panel_app/             # HoloViz Panel dashboard app (custom HTML/CSS, no charting library)
+│   ├── dashboard.py         # Page layout: stat tiles, region/subregion, ranked lists, currency/language grids
 │   └── trino_client.py      # Datamart query helper (reads latest snapshot)
+├── shared/                # Code shared between dagster_project and panel_app (Trino connection setup)
 ├── docs/                  # Architecture diagram and other docs
 ├── garage/                # Garage (S3-compatible storage) config
 ├── scripts/               # One-off setup scripts (e.g. Lakekeeper warehouse init)
@@ -85,15 +86,22 @@ Layers: **raw** (JSON in Garage) → **staging** (Iceberg table) → **datamart*
    ```
 7. Open the Panel dashboard at http://localhost:3001. It connects to Trino on
    startup (host `trino`, port `8080`, catalog `iceberg`, user `dagster`, no
-   password/SSL — see `panel_app/trino_client.py`) and renders charts built
-   directly from the datamart tables below, each read from their latest
-   `snapshot_date`. Region totals and the top-20 cuts (most populous, most
-   densely populated) aren't separate tables — the dashboard derives them at
-   query time from `dm_subregion_summary` and `dm_countries` respectively:
-   - `datamart.dm_currency_distribution` — countries per currency
+   password/SSL — see `panel_app/trino_client.py`) and renders stat tiles,
+   ranked lists and grids built directly from the datamart tables below. A
+   **snapshot date selector** at the top of the page lists every
+   `snapshot_date` that exists in `dm_countries` (most recent first,
+   selected by default) and re-queries all datamart tables for that date
+   when changed — useful for comparing a given day against history once the
+   daily schedule has accumulated more than one snapshot. Region totals and
+   the top-10 cuts (most populous, most densely populated) aren't separate
+   tables — the dashboard derives them at query time from
+   `dm_subregion_summary` and `dm_countries` respectively:
+   - `datamart.dm_currency_distribution` — countries per currency, with the
+     currency's full name joined in from `reference.dim_currency`
    - `datamart.dm_language_distribution` — countries per language
    - `datamart.dm_subregion_summary` — population/area/country count per subregion (and, rolled up further, per region)
    - `datamart.dm_countries` — one row per country: population, area, population density, capital
+   - `reference.dim_currency` — static ISO 4217 currency code → name lookup (not derived from the API; see `dagster_project/assets/reference.py`)
 
    Reload the page after re-running the pipeline to pick up the newest
    snapshot; the dashboard has no database of its own, so nothing needs
