@@ -1,10 +1,13 @@
 from dagster import AssetCheckResult, AssetExecutionContext, MaterializeResult, asset, asset_check
 
+from dagster_project.assets.reference import dim_currency
 from dagster_project.assets.staging import stg_countries
 from dagster_project.constants import (
     SCHEMA_DATAMART,
+    SCHEMA_REFERENCE,
     SCHEMA_STAGING,
     SNAPSHOT_DATE_COLUMN,
+    TABLE_DIM_CURRENCY,
     TABLE_DM_COUNTRIES,
     TABLE_DM_CURRENCY_DISTRIBUTION,
     TABLE_DM_LANGUAGE_DISTRIBUTION,
@@ -55,23 +58,27 @@ def _row_count_check(trino: TrinoResource, table: str) -> AssetCheckResult:
     return AssetCheckResult(passed=count is not None and count > 0, metadata={"row_count": count})
 
 
-@asset(group_name="datamart", deps=[stg_countries])
+@asset(group_name="datamart", deps=[stg_countries, dim_currency])
 def dm_currency_distribution(
     context: AssetExecutionContext, trino: TrinoResource
 ) -> MaterializeResult:
-    """Datamart table: number of countries using each currency, for the
-    'currency distribution' chart."""
+    """Datamart table: number of countries using each currency (with the
+    currency's full name, joined from the dim_currency reference table),
+    for the 'currency distribution' chart."""
     row_count = _create_datamart_table(
         trino,
         TABLE_DM_CURRENCY_DISTRIBUTION,
         f"""
         SELECT
-            trim(currency_code) AS currency_code,
+            trim(t.currency_code) AS currency_code,
+            d.currency_name,
             count(*) AS country_count
         FROM {_staging_ref(trino)}
         CROSS JOIN UNNEST(split(currency_codes, ',')) AS t(currency_code)
+        LEFT JOIN {trino.catalog}.{SCHEMA_REFERENCE}.{TABLE_DIM_CURRENCY} d
+            ON d.currency_code = trim(t.currency_code)
         WHERE currency_codes IS NOT NULL AND currency_codes <> ''
-        GROUP BY trim(currency_code)
+        GROUP BY trim(t.currency_code), d.currency_name
         ORDER BY country_count DESC
         """,
     )

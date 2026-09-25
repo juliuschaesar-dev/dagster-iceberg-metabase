@@ -8,13 +8,13 @@ from dagster import (
     run_failure_sensor,
 )
 
-from dagster_project.assets import datamart, raw, staging
+from dagster_project.assets import datamart, raw, reference, staging
 from dagster_project.io_managers.iceberg_io_manager import IcebergIOManager
 from dagster_project.resources.api_resource import RestCountriesApiResource
 from dagster_project.resources.garage_resource import GarageResource
 from dagster_project.resources.trino_resource import TrinoResource
 
-all_assets = load_assets_from_modules([raw, staging, datamart])
+all_assets = load_assets_from_modules([raw, reference, staging, datamart])
 
 all_asset_checks = [
     staging.stg_countries_row_count_check,
