@@ -19,7 +19,6 @@ dev = [
 ]
 dashboard = [
     "panel>=1.9.4",
-    "hvplot>=0.12.2",
 ]
 
 [tool.dagster]

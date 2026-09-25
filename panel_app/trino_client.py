@@ -24,6 +24,17 @@ def query_df(sql: str) -> pd.DataFrame:
         conn.close()
 
 
+def snapshot_dates(table: str) -> list[str]:
+    """Every distinct snapshot_date in a datamart table, most recent first."""
+    df = query_df(f"SELECT DISTINCT snapshot_date FROM {table} ORDER BY snapshot_date DESC")
+    return [str(d) for d in df["snapshot_date"]]
+
+
+def snapshot(table: str, snapshot_date: str) -> pd.DataFrame:
+    """All rows from a datamart table's given snapshot_date."""
+    return query_df(f"SELECT * FROM {table} WHERE snapshot_date = DATE '{snapshot_date}'")
+
+
 def latest_snapshot(table: str) -> pd.DataFrame:
     """All rows from a datamart table's most recent snapshot_date."""
     return query_df(
