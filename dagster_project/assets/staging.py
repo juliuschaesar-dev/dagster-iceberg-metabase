@@ -1,4 +1,4 @@
-import polars as pl
+import pandas as pd
 from dagster import AssetCheckResult, AssetExecutionContext, asset, asset_check
 
 from dagster_project.assets.raw import RAW_OBJECT_KEY, raw_countries
@@ -46,14 +46,14 @@ def _flatten_country(country: dict) -> dict:
     io_manager_key="iceberg_io_manager",
     metadata={"schema": SCHEMA_STAGING},
 )
-def stg_countries(context: AssetExecutionContext, garage: GarageResource) -> pl.DataFrame:
+def stg_countries(context: AssetExecutionContext, garage: GarageResource) -> pd.DataFrame:
     """Reads the raw countries JSON and flattens nested structures (`name`,
     `currencies`, `languages`, `latlng`) into a flat table ready to be
     persisted as the Iceberg staging table."""
     raw_payload = garage.get_json(bucket=garage.bucket_raw, key=RAW_OBJECT_KEY)
 
     rows = [_flatten_country(country) for country in raw_payload]
-    df = pl.DataFrame(rows)
+    df = pd.DataFrame(rows)
 
     context.log.info(f"Flattened {len(df)} countries into staging schema")
     return df

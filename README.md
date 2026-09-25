@@ -1,9 +1,9 @@
-# Dagster Iceberg Metabase
+# Dagster Iceberg Panel
 
 Dagster pipeline that fetches country data from the [REST Countries API](https://restcountries.com),
 lands it raw in Garage (S3-compatible object storage), cleans it into an
 Iceberg staging table (via Lakekeeper + Trino), and builds Iceberg datamart
-tables for a Metabase dashboard.
+tables for a [HoloViz Panel](https://panel.holoviz.org) dashboard.
 
 Layers: **raw** (JSON in Garage) → **staging** (Iceberg table) → **datamart** (Iceberg tables).
 
@@ -19,14 +19,17 @@ Layers: **raw** (JSON in Garage) → **staging** (Iceberg table) → **datamart*
 │   ├── assets/             # raw/staging/datamart asset definitions
 │   ├── io_managers/        # Iceberg/Garage IO managers
 │   └── resources/          # API, Garage, and Trino resource definitions
+├── panel_app/             # HoloViz Panel dashboard app
+│   ├── dashboard.py         # Chart definitions and page layout
+│   └── trino_client.py      # Datamart query helper (reads latest snapshot)
 ├── docs/                  # Architecture diagram and other docs
 ├── garage/                # Garage (S3-compatible storage) config
 ├── scripts/               # One-off setup scripts (e.g. Lakekeeper warehouse init)
 ├── tests/                 # Unit tests for the pipeline assets
 ├── trino/
 │   └── catalog/            # Trino catalog configuration
-├── docker-compose.yml     # Service definitions (Dagster, Garage, Trino, Lakekeeper, Metabase, Postgres)
-├── Dockerfile             # Dagster service image
+├── docker-compose.yml     # Service definitions (Dagster, Garage, Trino, Lakekeeper, Panel, Postgres)
+├── Dockerfile             # Shared image for the Dagster and Panel services
 ├── pyproject.toml         # Python package/dependency definitions
 └── .env.example           # Environment variable template
 ```
@@ -35,7 +38,7 @@ Layers: **raw** (JSON in Garage) → **staging** (Iceberg table) → **datamart*
 
 - Docker + Docker Compose
 - A REST Countries API key (`API_TOKEN` in `.env`)
-- Python 3.10+ (needed to run `scripts/init_lakekeeper_warehouse.py`, and for
+- Python 3.11+ (needed to run `scripts/init_lakekeeper_warehouse.py`, and for
   Dagster/tests outside Docker). Use a virtualenv so these don't pollute your
   global Python:
   ```bash
@@ -80,24 +83,21 @@ Layers: **raw** (JSON in Garage) → **staging** (Iceberg table) → **datamart*
    ```bash
    docker compose exec dagster dagster job execute -m dagster_project -j countries_pipeline_job
    ```
-7. Open Metabase at http://localhost:3001 and complete the first-run setup
-   wizard (creates your own admin account — no default credentials). When
-   asked to add a database, choose **Starburst** (Metabase's built-in Trino
-   driver — no plugin install needed) with:
-   - Host: `trino`
-   - Port: `8080`
-   - Catalog: `iceberg`
-   - User: `dagster`
-   - No password / SSL
-
-   Then build questions (charts) on the datamart tables below and arrange
-   them into a dashboard:
-   - `datamart.dm_population_by_region` — population and country count per region
+7. Open the Panel dashboard at http://localhost:3001. It connects to Trino on
+   startup (host `trino`, port `8080`, catalog `iceberg`, user `dagster`, no
+   password/SSL — see `panel_app/trino_client.py`) and renders charts built
+   directly from the datamart tables below, each read from their latest
+   `snapshot_date`. Region totals and the top-20 cuts (most populous, most
+   densely populated) aren't separate tables — the dashboard derives them at
+   query time from `dm_subregion_summary` and `dm_countries` respectively:
    - `datamart.dm_currency_distribution` — countries per currency
    - `datamart.dm_language_distribution` — countries per language
-   - `datamart.dm_subregion_summary` — population/area/country count per subregion
-   - `datamart.dm_population_density` — population density (people/km²) per country
-   - `datamart.dm_top_countries_by_population` — the 20 most populous countries
+   - `datamart.dm_subregion_summary` — population/area/country count per subregion (and, rolled up further, per region)
+   - `datamart.dm_countries` — one row per country: population, area, population density, capital
+
+   Reload the page after re-running the pipeline to pick up the newest
+   snapshot; the dashboard has no database of its own, so nothing needs
+   re-configuring.
 
 The daily schedule (`daily_countries_pipeline`, 06:00) re-runs the full
 raw → staging → datamart pipeline automatically once enabled in the Dagster UI.
@@ -131,6 +131,17 @@ Every asset's external resources (`api`, `garage`, `trino`) are Dagster
 resources injected at runtime, so tests mock them directly instead of hitting
 real services.
 
+## Dashboard development
+
+To run the Panel app outside Docker (with live reload) against an already
+running `trino` service:
+
+```bash
+pip install -e ".[dashboard]"
+export TRINO_HOST=localhost TRINO_PORT=8080 TRINO_USER=dagster TRINO_CATALOG=iceberg TRINO_SCHEMA_DATAMART=datamart
+panel serve panel_app/dashboard.py --autoreload --show
+```
+
 ## Stopping
 
 ```bash
@@ -138,11 +149,12 @@ docker compose down
 ```
 
 Stops and removes the containers, but keeps all data (Postgres, Garage,
-Metabase, Dagster home) in their named volumes — a later `docker compose up -d`
-picks up right where you left off.
+Dagster home) in their named volumes — a later `docker compose up -d`
+picks up right where you left off. The Panel dashboard itself is stateless
+(it only reads from Trino), so there's no dashboard data to preserve.
 
-To also wipe all data (raw/staging/datamart tables, the Metabase dashboard,
-everything) and start clean:
+To also wipe all data (raw/staging/datamart tables, everything) and start
+clean:
 
 ```bash
 docker compose down -v
