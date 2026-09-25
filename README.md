@@ -20,19 +20,14 @@ Layers: **raw** (JSON in Garage) → **staging** (Iceberg table) → **datamart*
 │   ├── io_managers/        # Iceberg/Garage IO managers
 │   └── resources/          # API, Garage, and Trino resource definitions
 ├── panel_app/             # HoloViz Panel dashboard app (custom HTML/CSS, no charting library)
-│   ├── dashboard.py         # Page layout: stat tiles, region/subregion, ranked lists, currency/language grids
-│   └── trino_client.py      # Datamart query helper (reads latest snapshot)
 ├── shared/                # Code shared between dagster_project and panel_app (Trino connection setup)
-├── docs/                  # Architecture diagram and other docs
+├── docs/                  # Architecture diagram and dashboard screenshots
+│   └── screenshots/
 ├── garage/                # Garage (S3-compatible storage) config
 ├── scripts/               # One-off setup scripts (e.g. Lakekeeper warehouse init)
 ├── tests/                 # Unit tests for the pipeline assets
-├── trino/
-│   └── catalog/            # Trino catalog configuration
-├── docker-compose.yml     # Service definitions (Dagster, Garage, Trino, Lakekeeper, Panel, Postgres)
-├── Dockerfile             # Shared image for the Dagster and Panel services
-├── pyproject.toml         # Python package/dependency definitions
-└── .env.example           # Environment variable template
+└── trino/
+    └── catalog/            # Trino catalog configuration
 ```
 
 ## Prerequisites
@@ -139,7 +134,12 @@ Every asset's external resources (`api`, `garage`, `trino`) are Dagster
 resources injected at runtime, so tests mock them directly instead of hitting
 real services.
 
-## Dashboard development
+## Dashboard
+
+Dashboard screenshot for reference:
+
+![Dashboard (dark)](docs/screenshots/Black/dashboard-1.png)
+![Dashboard (dark)](docs/screenshots/Black/dashboard-2.png)
 
 To run the Panel app outside Docker (with live reload) against an already
 running `trino` service:
