@@ -4,6 +4,8 @@ from typing import Any, Iterator
 import trino
 from dagster import ConfigurableResource, EnvVar
 
+from shared.trino import connect
+
 
 class TrinoResource(ConfigurableResource):
     """Connection to Trino, reads config from env."""
@@ -15,12 +17,7 @@ class TrinoResource(ConfigurableResource):
 
     @contextmanager
     def _connection(self) -> Iterator["trino.dbapi.Connection"]:
-        conn = trino.dbapi.connect(
-            host=self.host,
-            port=self.port,
-            user=self.user,
-            catalog=self.catalog,
-        )
+        conn = connect(host=self.host, port=self.port, user=self.user, catalog=self.catalog)
         try:
             yield conn
         finally:

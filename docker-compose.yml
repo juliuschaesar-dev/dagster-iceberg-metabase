@@ -1,4 +1,4 @@
-name: dagster-iceberg-superset
+name: dagster-iceberg-panel
 
 services:
   postgres:
@@ -96,25 +96,29 @@ services:
       timeout: 5s
       retries: 15
 
-  metabase:
-    image: metabase/metabase:v0.63.18
-    container_name: metabase
+  panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: panel
     restart: unless-stopped
     depends_on:
       trino:
         condition: service_healthy
     environment:
-      MB_SITE_NAME: REST Countries Dashboard
-      MB_DB_FILE: /metabase-data/metabase.db
+      TRINO_HOST: trino
+      TRINO_PORT: 8080
+      TRINO_USER: dagster
+      TRINO_CATALOG: iceberg
+      TRINO_SCHEMA_DATAMART: datamart
     ports:
-      - "3001:3000"
-    volumes:
-      - metabase_data:/metabase-data
+      - "3001:5006"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5006"]
       interval: 10s
       timeout: 5s
       retries: 15
+    command: ["panel", "serve", "panel_app/dashboard.py", "--address", "0.0.0.0", "--port", "5006", "--allow-websocket-origin=*"]
 
   dagster:
     build:
@@ -144,5 +148,4 @@ volumes:
   postgres_data:
   garage_meta:
   garage_data:
-  metabase_data:
   dagster_home:
